@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>BoltTwin — KONE Elevate</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800">
+<div id="root"></div>
+
+<script>
+(() => {
+  const { useState, useEffect, useRef } = React;
+  const API_BASE = "http://localhost:8000";
+  function bandColor(band) {
+    return {
+      HEALTHY: "bg-emerald-100 text-emerald-800 border-emerald-300",
+      INSPECT: "bg-amber-100 text-amber-800 border-amber-300",
+      CRITICAL: "bg-rose-100 text-rose-800 border-rose-300"
+    }[band] || "bg-slate-100 text-slate-800 border-slate-300";
+  }
+  function PlotlyChart({ id, data, layout }) {
+    const ref = useRef(null);
+    useEffect(() => {
+      if (ref.current) {
+        Plotly.newPlot(
+          ref.current,
+          data,
+          {
+            ...layout,
+            autosize: true,
+            margin: { t: 40, l: 50, r: 20, b: 40 },
+            font: { family: "ui-sans-serif, system-ui" }
+          },
+          { displayModeBar: false, responsive: true }
+        );
+      }
+      return () => {
+        if (ref.current) Plotly.purge(ref.current);
+      };
+    }, [JSON.stringify(data), JSON.stringify(layout)]);
+    return /* @__PURE__ */ React.createElement("div", { ref, id, className: "w-full h-72" });
+  }
+  function StatCard({ label, value, sub, accent }) {
+    return /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-xl border border-slate-200 p-5 shadow-sm" }, /* @__PURE__ */ React.createElement("div", { className: "text-xs uppercase tracking-wide text-slate-500" }, label), /* @__PURE__ */ React.createElement("div", { className: "text-3xl font-bold mt-1 " + (accent || "text-slate-900") }, value), sub && /* @__PURE__ */ React.createElement("div", { className: "text-xs text-slate-500 mt-1" }, sub));
+  }
+  function App() {
+    const [bolts, setBolts] = useState([]);
+    const [selectedId, setSelectedId] = useState(null);
+    const [sim, setSim] = useState(null);
+    const [whatif, setWhatif] = useState(null);
+    const [vibChange, setVibChange] = useState(-15);
+    const [question, setQuestion] = useState("");
+    const [answer, setAnswer] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+    useEffect(() => {
+      fetch(`${API_BASE}/bolts`).then((r) => r.json()).then((data) => {
+        setBolts(data);
+        if (data.length) setSelectedId(data[0].id);
+      }).catch(() => setError("Can't reach the BoltTwin API \u2014 is the backend running on :8000?"));
+    }, []);
+    useEffect(() => {
+      if (selectedId == null) return;
+      runSimulate(selectedId);
+      setWhatif(null);
+    }, [selectedId]);
+    function runSimulate(id) {
+      setLoading(true);
+      setError("");
+      fetch(`${API_BASE}/bolts/${id}/simulate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}"
+      }).then((r) => r.json()).then(setSim).catch(() => setError("Simulation request failed.")).finally(() => setLoading(false));
+    }
+    function runWhatIf() {
+      setLoading(true);
+      setError("");
+      fetch(`${API_BASE}/bolts/${selectedId}/whatif`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vibration_change_pct: Number(vibChange) })
+      }).then((r) => r.json()).then(setWhatif).catch(() => setError("What-if request failed.")).finally(() => setLoading(false));
+    }
+    function askQuestion() {
+      if (!question.trim()) return;
+      fetch(`${API_BASE}/bolts/${selectedId}/ask?q=${encodeURIComponent(question)}`).then((r) => r.json()).then((d) => setAnswer(d.answer)).catch(() => setAnswer("Couldn't reach the assistant."));
+    }
+    const selectedBolt = bolts.find((b) => b.id === selectedId);
+    return /* @__PURE__ */ React.createElement("div", { className: "min-h-screen flex" }, /* @__PURE__ */ React.createElement("aside", { className: "w-72 bg-white border-r border-slate-200 p-4 flex-shrink-0" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mb-6" }, /* @__PURE__ */ React.createElement("div", { className: "w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold" }, "B"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { className: "font-bold text-lg leading-tight" }, "BoltTwin"), /* @__PURE__ */ React.createElement("div", { className: "text-xs text-slate-500 leading-tight" }, "KONE Elevate \u2014 Fastener Health"))), /* @__PURE__ */ React.createElement("div", { className: "text-xs font-semibold text-slate-400 uppercase mb-2" }, "Fleet"), /* @__PURE__ */ React.createElement("div", { className: "space-y-1" }, bolts.map((b) => /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        key: b.id,
+        onClick: () => setSelectedId(b.id),
+        className: "w-full text-left px-3 py-2 rounded-lg border text-sm transition " + (b.id === selectedId ? "bg-blue-50 border-blue-300 text-blue-800" : "border-transparent hover:bg-slate-50")
+      },
+      /* @__PURE__ */ React.createElement("div", { className: "font-semibold" }, b.tag, " \u2014 ", b.component_type),
+      /* @__PURE__ */ React.createElement("div", { className: "text-xs text-slate-500" }, b.elevator_id, " \xB7 ", Math.round(b.cycles).toLocaleString(), " cycles")
+    )), bolts.length === 0 && !error && /* @__PURE__ */ React.createElement("div", { className: "text-sm text-slate-400" }, "Loading fleet\u2026"))), /* @__PURE__ */ React.createElement("main", { className: "flex-1 p-8 max-w-5xl" }, error && /* @__PURE__ */ React.createElement("div", { className: "mb-4 p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm" }, error), selectedBolt && /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h1", { className: "text-2xl font-bold" }, selectedBolt.tag, " \u2014 ", selectedBolt.component_type), /* @__PURE__ */ React.createElement("p", { className: "text-slate-500 text-sm" }, selectedBolt.elevator_id, " \xB7 vibration ", selectedBolt.vibration_amplitude_g, "g \xB7 ", selectedBolt.temperature_c, "\xB0C")), sim && /* @__PURE__ */ React.createElement("span", { className: "px-3 py-1 rounded-full border text-sm font-semibold " + bandColor(sim.band) }, sim.band)), loading && /* @__PURE__ */ React.createElement("div", { className: "text-sm text-slate-500 mb-4" }, "Running physics + ML pipeline\u2026"), sim && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-3 gap-4 mb-6" }, /* @__PURE__ */ React.createElement(
+      StatCard,
+      {
+        label: "Health Index",
+        value: sim.health_index_final + " / 100",
+        sub: `Physics baseline: ${sim.health_index_baseline}`
+      }
+    ), /* @__PURE__ */ React.createElement(
+      StatCard,
+      {
+        label: "Preload Loss",
+        value: sim.preload_loss_pct + "%",
+        sub: "Governing mechanism check below"
+      }
+    ), /* @__PURE__ */ React.createElement(
+      StatCard,
+      {
+        label: "Remaining Life",
+        value: Math.round(sim.rul_cycles).toLocaleString() + " cycles",
+        sub: `Risk band: ${sim.band}`
+      }
+    )), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-4 mb-6" }, /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-xl border border-slate-200 p-4 shadow-sm" }, /* @__PURE__ */ React.createElement("div", { className: "font-semibold mb-2 text-sm text-slate-600" }, "Preload Decay vs. Cycles"), /* @__PURE__ */ React.createElement(
+      PlotlyChart,
+      {
+        data: [{
+          x: sim.decay_curve.cycles,
+          y: sim.decay_curve.preload_remaining_pct,
+          type: "scatter",
+          mode: "lines",
+          line: { color: "#2563eb", width: 3 }
+        }],
+        layout: { yaxis: { title: "Preload remaining (%)" }, xaxis: { title: "Cycles" } }
+      }
+    )), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-xl border border-slate-200 p-4 shadow-sm" }, /* @__PURE__ */ React.createElement("div", { className: "font-semibold mb-2 text-sm text-slate-600" }, "Risk Contributor Breakdown"), /* @__PURE__ */ React.createElement(
+      PlotlyChart,
+      {
+        data: [{
+          x: Object.values(sim.risk_breakdown_pct),
+          y: Object.keys(sim.risk_breakdown_pct).map((k) => k.replace("_", " ")),
+          type: "bar",
+          orientation: "h",
+          marker: { color: "#2563eb" }
+        }],
+        layout: { xaxis: { title: "Contribution to risk (%)" } }
+      }
+    ))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-xl border border-slate-200 p-5 shadow-sm mb-6" }, /* @__PURE__ */ React.createElement("div", { className: "font-semibold mb-2 text-sm text-slate-600" }, "Grounded Assistant"), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-700 leading-relaxed" }, sim.explanation), /* @__PURE__ */ React.createElement("div", { className: "mt-3 flex gap-2" }, /* @__PURE__ */ React.createElement(
+      "input",
+      {
+        value: question,
+        onChange: (e) => setQuestion(e.target.value),
+        onKeyDown: (e) => e.key === "Enter" && askQuestion(),
+        placeholder: "Ask e.g. 'why is this bolt at risk?'",
+        className: "flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm"
+      }
+    ), /* @__PURE__ */ React.createElement("button", { onClick: askQuestion, className: "px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-semibold" }, "Ask")), answer && /* @__PURE__ */ React.createElement("p", { className: "mt-2 text-sm text-blue-800 bg-blue-50 rounded-lg p-3" }, answer)), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-xl border border-slate-200 p-5 shadow-sm" }, /* @__PURE__ */ React.createElement("div", { className: "font-semibold mb-3 text-sm text-slate-600" }, "What-If Engine"), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-4 mb-4" }, /* @__PURE__ */ React.createElement("label", { className: "text-sm text-slate-600" }, "Vibration change"), /* @__PURE__ */ React.createElement(
+      "input",
+      {
+        type: "range",
+        min: "-50",
+        max: "50",
+        value: vibChange,
+        onChange: (e) => setVibChange(e.target.value),
+        className: "flex-1"
+      }
+    ), /* @__PURE__ */ React.createElement("span", { className: "text-sm font-semibold w-16 text-right" }, vibChange, "%"), /* @__PURE__ */ React.createElement("button", { onClick: runWhatIf, className: "px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold" }, "Run What-If")), whatif && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-4 mb-3" }, /* @__PURE__ */ React.createElement(
+      PlotlyChart,
+      {
+        data: [{
+          x: ["Baseline", "Scenario"],
+          y: [whatif.baseline.health_index_final, whatif.scenario.health_index_final],
+          type: "bar",
+          marker: { color: ["#94a3b8", "#16a34a"] }
+        }],
+        layout: { title: "Health Index: Baseline vs. What-If" }
+      }
+    ), /* @__PURE__ */ React.createElement(
+      PlotlyChart,
+      {
+        data: [{
+          x: ["Baseline", "Scenario"],
+          y: [whatif.baseline.rul_cycles, whatif.scenario.rul_cycles],
+          type: "bar",
+          marker: { color: ["#94a3b8", "#16a34a"] }
+        }],
+        layout: { title: "Remaining Life: Baseline vs. What-If" }
+      }
+    )), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-slate-700 bg-emerald-50 border border-emerald-200 rounded-lg p-3" }, whatif.summary))))));
+  }
+  ReactDOM.createRoot(document.getElementById("root")).render(/* @__PURE__ */ React.createElement(App, null));
+})();
+
+</script>
+</body>
+</html>
