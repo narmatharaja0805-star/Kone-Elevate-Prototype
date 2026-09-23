@@ -48,6 +48,174 @@
   function StatCard({ label, value, sub, accent }) {
     return /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-xl border border-slate-200 p-5 shadow-sm" }, /* @__PURE__ */ React.createElement("div", { className: "text-xs uppercase tracking-wide text-slate-500" }, label), /* @__PURE__ */ React.createElement("div", { className: "text-3xl font-bold mt-1 " + (accent || "text-slate-900") }, value), sub && /* @__PURE__ */ React.createElement("div", { className: "text-xs text-slate-500 mt-1" }, sub));
   }
+
+  // --- Digital Twin View: schematic elevator car with color-coded bolt markers ---
+  function bandFillColor(band) {
+    return {
+      HEALTHY: "#10b981",
+      INSPECT: "#f59e0b",
+      CRITICAL: "#e11d48"
+    }[band] || "#94a3b8";
+  }
+  const COMPONENT_POSITIONS = {
+    "Door Operator": { x: 150, y: 95 },
+    "Motor Mount": { x: 90, y: 45 },
+    "Guide Rail": { x: 50, y: 240 },
+    "Brake Caliper": { x: 210, y: 45 }
+  };
+  function TwinLegend() {
+    const items = [
+      ["Healthy", "#10b981"],
+      ["Inspect", "#f59e0b"],
+      ["Critical", "#e11d48"],
+      ["Loading\u2026", "#94a3b8"]
+    ];
+    return /* @__PURE__ */ React.createElement(
+      "div",
+      { className: "flex items-center gap-4 text-xs text-slate-500 mt-2" },
+      items.map(([label, color]) => /* @__PURE__ */ React.createElement(
+        "span",
+        { key: label, className: "flex items-center gap-1" },
+        /* @__PURE__ */ React.createElement("span", { className: "inline-block w-2.5 h-2.5 rounded-full", style: { backgroundColor: color } }),
+        label
+      ))
+    );
+  }
+  function ElevatorTwinSVG({ carBolts, twinData, selectedId, onSelectBolt }) {
+    return /* @__PURE__ */ React.createElement(
+      "svg",
+      { viewBox: "0 0 300 420", className: "w-full h-[380px]" },
+      /* @__PURE__ */ React.createElement("rect", { x: 40, y: 20, width: 220, height: 55, rx: 6, fill: "#e2e8f0", stroke: "#94a3b8" }),
+      /* @__PURE__ */ React.createElement("text", { x: 150, y: 14, textAnchor: "middle", fontSize: 10, fill: "#64748b" }, "MACHINE ROOM"),
+      /* @__PURE__ */ React.createElement("line", { x1: 50, y1: 80, x2: 50, y2: 390, stroke: "#94a3b8", strokeWidth: 4 }),
+      /* @__PURE__ */ React.createElement("line", { x1: 250, y1: 80, x2: 250, y2: 390, stroke: "#94a3b8", strokeWidth: 4 }),
+      /* @__PURE__ */ React.createElement("rect", { x: 60, y: 90, width: 180, height: 280, rx: 8, fill: "#f8fafc", stroke: "#334155", strokeWidth: 2 }),
+      /* @__PURE__ */ React.createElement("text", { x: 150, y: 375, textAnchor: "middle", fontSize: 11, fill: "#334155" }, "CAR"),
+      carBolts.map((b) => {
+        const pos = COMPONENT_POSITIONS[b.component_type] || { x: 150, y: 200 };
+        const info = twinData[b.id];
+        const color = info ? bandFillColor(info.band) : "#cbd5e1";
+        const isSelected = b.id === selectedId;
+        return /* @__PURE__ */ React.createElement(
+          "g",
+          { key: b.id, onClick: () => onSelectBolt(b.id), style: { cursor: "pointer" } },
+          /* @__PURE__ */ React.createElement("circle", {
+            cx: pos.x,
+            cy: pos.y,
+            r: isSelected ? 12 : 9,
+            fill: color,
+            stroke: isSelected ? "#1e293b" : "#ffffff",
+            strokeWidth: isSelected ? 3 : 2
+          }),
+          /* @__PURE__ */ React.createElement(
+            "text",
+            { x: pos.x, y: pos.y - 16, textAnchor: "middle", fontSize: 10, fontWeight: 700, fill: "#334155" },
+            b.tag
+          )
+        );
+      })
+    );
+  }
+  function DigitalTwinPanel({ carBolts, twinData, selectedId, onSelectBolt, elevatorId }) {
+    if (!carBolts.length) return null;
+    return /* @__PURE__ */ React.createElement(
+      "div",
+      { className: "bg-white rounded-xl border border-slate-200 p-4 shadow-sm mb-6" },
+      /* @__PURE__ */ React.createElement(
+        "div",
+        { className: "flex items-center justify-between mb-2" },
+        /* @__PURE__ */ React.createElement("div", { className: "font-semibold text-sm text-slate-600" }, "Digital Twin View"),
+        /* @__PURE__ */ React.createElement("div", { className: "text-xs text-slate-400" }, elevatorId)
+      ),
+      /* @__PURE__ */ React.createElement(ElevatorTwinSVG, { carBolts, twinData, selectedId, onSelectBolt }),
+      /* @__PURE__ */ React.createElement(TwinLegend, null),
+      /* @__PURE__ */ React.createElement("p", { className: "text-xs text-slate-400 mt-2" }, "Click a marker to select that bolt. Colors reflect each bolt's current Health Index band.")
+    );
+  }
+
+  function OptimizerPanel({ results, techHours, setTechHours, onRun, loading }) {
+    return /* @__PURE__ */ React.createElement(
+      "div",
+      { className: "bg-white rounded-xl border border-slate-200 p-5 shadow-sm mb-6" },
+      /* @__PURE__ */ React.createElement(
+        "div",
+        { className: "flex items-center justify-between mb-4" },
+        /* @__PURE__ */ React.createElement("div", { className: "font-semibold text-lg text-slate-800" }, "Fleet Maintenance Optimizer"),
+        /* @__PURE__ */ React.createElement(
+          "div",
+          { className: "flex items-center gap-3" },
+          /* @__PURE__ */ React.createElement("label", { className: "text-sm text-slate-600 font-medium" }, "Available Tech Hours:"),
+          /* @__PURE__ */ React.createElement("input", {
+            type: "number",
+            min: "0.5",
+            step: "0.5",
+            value: techHours,
+            onChange: (e) => setTechHours(e.target.value),
+            className: "w-20 border border-slate-300 rounded px-2 py-1 text-sm"
+          }),
+          /* @__PURE__ */ React.createElement(
+            "button",
+            {
+              onClick: onRun,
+              disabled: loading,
+              className: "px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+            },
+            loading ? "Optimizing\u2026" : "Run Optimizer"
+          )
+        )
+      ),
+      results && /* @__PURE__ */ React.createElement(
+        "div",
+        { className: "grid grid-cols-2 gap-6" },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          null,
+          /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-bold text-emerald-700 uppercase tracking-wide mb-3 flex items-center justify-between" }, 
+            "Recommended Actions",
+            /* @__PURE__ */ React.createElement("span", { className: "text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full" }, results.total_hours_used + " hrs used")
+          ),
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { className: "space-y-2 max-h-60 overflow-y-auto pr-1" },
+            results.selected.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "text-sm text-slate-500 italic" }, "No actions selected. Increase hours."),
+            results.selected.map((item) => /* @__PURE__ */ React.createElement(
+              "div",
+              { key: item.id, className: "p-3 rounded-lg border border-emerald-200 bg-emerald-50 flex justify-between items-center" },
+              /* @__PURE__ */ React.createElement(
+                "div",
+                null,
+                /* @__PURE__ */ React.createElement("div", { className: "font-semibold text-slate-800 text-sm" }, item.tag, " \u2014 ", item.component_type),
+                /* @__PURE__ */ React.createElement("div", { className: "text-xs text-slate-500 mt-0.5" }, "Health: ", item.health_index, " \xB7 Risk: ", item.risk_score)
+              ),
+              /* @__PURE__ */ React.createElement("div", { className: "text-sm font-bold text-emerald-700" }, item.inspection_hours, "h")
+            ))
+          )
+        ),
+        /* @__PURE__ */ React.createElement(
+          "div",
+          null,
+          /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-bold text-slate-500 uppercase tracking-wide mb-3" }, "Deferred Actions"),
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { className: "space-y-2 max-h-60 overflow-y-auto pr-1" },
+            results.deferred.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "text-sm text-slate-500 italic" }, "All actions fit in the budget!"),
+            results.deferred.map((item) => /* @__PURE__ */ React.createElement(
+              "div",
+              { key: item.id, className: "p-3 rounded-lg border border-slate-200 bg-slate-50 flex justify-between items-center opacity-75" },
+              /* @__PURE__ */ React.createElement(
+                "div",
+                null,
+                /* @__PURE__ */ React.createElement("div", { className: "font-semibold text-slate-600 text-sm" }, item.tag, " \u2014 ", item.component_type),
+                /* @__PURE__ */ React.createElement("div", { className: "text-xs text-slate-400 mt-0.5" }, "Health: ", item.health_index, " \xB7 Risk: ", item.risk_score)
+              ),
+              /* @__PURE__ */ React.createElement("div", { className: "text-sm font-bold text-slate-500" }, item.inspection_hours, "h")
+            ))
+          )
+        )
+      )
+    );
+  }
+
   function App() {
     const [bolts, setBolts] = useState([]);
     const [selectedId, setSelectedId] = useState(null);
@@ -58,6 +226,10 @@
     const [answer, setAnswer] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    const [twinData, setTwinData] = useState({});
+    const [optResults, setOptResults] = useState(null);
+    const [techHours, setTechHours] = useState(5.0);
+    const [optLoading, setOptLoading] = useState(false);
     useEffect(() => {
       fetch(`${API_BASE}/bolts`).then((r) => r.json()).then((data) => {
         setBolts(data);
@@ -69,6 +241,26 @@
       runSimulate(selectedId);
       setWhatif(null);
     }, [selectedId]);
+    useEffect(() => {
+      const current = bolts.find((b) => b.id === selectedId);
+      if (!current) return;
+      const carBoltIds = bolts.filter((b) => b.elevator_id === current.elevator_id).map((b) => b.id);
+      Promise.all(
+        carBoltIds.map((id) => fetch(`${API_BASE}/bolts/${id}/simulate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}"
+        }).then((r) => r.json()).then((d) => [id, d]).catch(() => [id, null]))
+      ).then((pairs) => {
+        setTwinData((prev) => {
+          const next = { ...prev };
+          pairs.forEach(([id, d]) => {
+            if (d) next[id] = { band: d.band, health_index_final: d.health_index_final };
+          });
+          return next;
+        });
+      });
+    }, [selectedId, bolts.length]);
     function runSimulate(id) {
       setLoading(true);
       setError("");
@@ -87,6 +279,15 @@
         body: JSON.stringify({ vibration_change_pct: Number(vibChange) })
       }).then((r) => r.json()).then(setWhatif).catch(() => setError("What-if request failed.")).finally(() => setLoading(false));
     }
+    function runOptimizer() {
+      setOptLoading(true);
+      setError("");
+      fetch(`${API_BASE}/fleet/optimize-maintenance?hours=${Number(techHours)}`)
+        .then((r) => r.json())
+        .then(setOptResults)
+        .catch(() => setError("Failed to run optimizer."))
+        .finally(() => setOptLoading(false));
+    }
     function askQuestion() {
       if (!question.trim()) return;
       fetch(`${API_BASE}/bolts/${selectedId}/ask?q=${encodeURIComponent(question)}`).then((r) => r.json()).then((d) => setAnswer(d.answer)).catch(() => setAnswer("Couldn't reach the assistant."));
@@ -101,7 +302,7 @@
       },
       /* @__PURE__ */ React.createElement("div", { className: "font-semibold" }, b.tag, " \u2014 ", b.component_type),
       /* @__PURE__ */ React.createElement("div", { className: "text-xs text-slate-500" }, b.elevator_id, " \xB7 ", Math.round(b.cycles).toLocaleString(), " cycles")
-    )), bolts.length === 0 && !error && /* @__PURE__ */ React.createElement("div", { className: "text-sm text-slate-400" }, "Loading fleet\u2026"))), /* @__PURE__ */ React.createElement("main", { className: "flex-1 p-8 max-w-5xl" }, error && /* @__PURE__ */ React.createElement("div", { className: "mb-4 p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm" }, error), selectedBolt && /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h1", { className: "text-2xl font-bold" }, selectedBolt.tag, " \u2014 ", selectedBolt.component_type), /* @__PURE__ */ React.createElement("p", { className: "text-slate-500 text-sm" }, selectedBolt.elevator_id, " \xB7 vibration ", selectedBolt.vibration_amplitude_g, "g \xB7 ", selectedBolt.temperature_c, "\xB0C")), sim && /* @__PURE__ */ React.createElement("span", { className: "px-3 py-1 rounded-full border text-sm font-semibold " + bandColor(sim.band) }, sim.band)), loading && /* @__PURE__ */ React.createElement("div", { className: "text-sm text-slate-500 mb-4" }, "Running physics + ML pipeline\u2026"), sim && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-3 gap-4 mb-6" }, /* @__PURE__ */ React.createElement(
+    )), bolts.length === 0 && !error && /* @__PURE__ */ React.createElement("div", { className: "text-sm text-slate-400" }, "Loading fleet\u2026"))), /* @__PURE__ */ React.createElement("main", { className: "flex-1 p-8 max-w-5xl" }, error && /* @__PURE__ */ React.createElement("div", { className: "mb-4 p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm" }, error), /* @__PURE__ */ React.createElement(OptimizerPanel, { results: optResults, techHours, setTechHours, onRun: runOptimizer, loading: optLoading }), selectedBolt && /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h1", { className: "text-2xl font-bold" }, selectedBolt.tag, " \u2014 ", selectedBolt.component_type), /* @__PURE__ */ React.createElement("p", { className: "text-slate-500 text-sm" }, selectedBolt.elevator_id, " \xB7 vibration ", selectedBolt.vibration_amplitude_g, "g \xB7 ", selectedBolt.temperature_c, "\xB0C")), sim && /* @__PURE__ */ React.createElement("span", { className: "px-3 py-1 rounded-full border text-sm font-semibold " + bandColor(sim.band) }, sim.band)), loading && /* @__PURE__ */ React.createElement("div", { className: "text-sm text-slate-500 mb-4" }, "Running physics + ML pipeline\u2026"), sim && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-3 gap-4 mb-6" }, /* @__PURE__ */ React.createElement(
       StatCard,
       {
         label: "Health Index",
@@ -122,7 +323,7 @@
         value: Math.round(sim.rul_cycles).toLocaleString() + " cycles",
         sub: `Risk band: ${sim.band}`
       }
-    )), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-4 mb-6" }, /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-xl border border-slate-200 p-4 shadow-sm" }, /* @__PURE__ */ React.createElement("div", { className: "font-semibold mb-2 text-sm text-slate-600" }, "Preload Decay vs. Cycles"), /* @__PURE__ */ React.createElement(
+    )), /* @__PURE__ */ React.createElement(DigitalTwinPanel, { carBolts: bolts.filter((b) => b.elevator_id === selectedBolt.elevator_id), twinData, selectedId, onSelectBolt: setSelectedId, elevatorId: selectedBolt.elevator_id }), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-4 mb-6" }, /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-xl border border-slate-200 p-4 shadow-sm" }, /* @__PURE__ */ React.createElement("div", { className: "font-semibold mb-2 text-sm text-slate-600" }, "Preload Decay vs. Cycles"), /* @__PURE__ */ React.createElement(
       PlotlyChart,
       {
         data: [{
