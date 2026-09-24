@@ -132,6 +132,80 @@ def ask(bolt_id: int, q: str, db: Session = Depends(get_db)):
     return {"question": q, "answer": answer}
 
 
+@app.post("/bolts/{bolt_id}/telemetry", response_model=schemas.BoltOut)
+def update_telemetry(bolt_id: int, req: schemas.TelemetryPayload, db: Session = Depends(get_db)):
+    bolt = db.get(models.Bolt, bolt_id)
+    if not bolt:
+        raise HTTPException(404, "Bolt not found")
+    
+    bolt.cycles = req.cycles
+    bolt.vibration_amplitude_g = req.vibration_amplitude_g
+    bolt.temperature_c = req.temperature_c
+    
+    db.commit()
+    db.refresh(bolt)
+    return bolt
+
+
+@app.get("/fleet/optimize-maintenance", response_model=schemas.OptimizeMaintenanceResponse)
+def optimize_maintenance(hours: float = 5.0, db: Session = Depends(get_db)):
+    # Hardcoded component properties: criticality (1-10) and inspection hours
+    COMPONENT_PROPS = {
+        "Brake Caliper": {"criticality": 10, "hours": 2.0},
+        "Motor Mount": {"criticality": 7, "hours": 1.5},
+        "Guide Rail": {"criticality": 5, "hours": 1.0},
+        "Door Operator": {"criticality": 3, "hours": 0.5},
+    }
+    
+    bolts = db.query(models.Bolt).all()
+    actions = []
+    
+    for b in bolts:
+        # Get simulated health
+        sim = _simulate(b.cycles, b.vibration_amplitude_g, b.temperature_c)
+        health = sim["health_index_final"]
+        
+        props = COMPONENT_PROPS.get(b.component_type, {"criticality": 5, "hours": 1.0})
+        risk = (100 - health) * props["criticality"]
+        value_per_hour = risk / props["hours"]
+        
+        actions.append({
+            "action": schemas.MaintenanceAction(
+                id=b.id,
+                tag=b.tag,
+                component_type=b.component_type,
+                health_index=round(health, 1),
+                risk_score=round(risk, 1),
+                inspection_hours=props["hours"]
+            ),
+            "value_per_hour": value_per_hour
+        })
+        
+    # Greedy knapsack: sort by value per hour descending
+    actions.sort(key=lambda x: x["value_per_hour"], reverse=True)
+    
+    selected = []
+    deferred = []
+    hours_used = 0.0
+    risk_mitigated = 0.0
+    
+    for item in actions:
+        act = item["action"]
+        if hours_used + act.inspection_hours <= hours:
+            selected.append(act)
+            hours_used += act.inspection_hours
+            risk_mitigated += act.risk_score
+        else:
+            deferred.append(act)
+            
+    return schemas.OptimizeMaintenanceResponse(
+        selected=selected,
+        deferred=deferred,
+        total_hours_used=round(hours_used, 1),
+        total_risk_mitigated=round(risk_mitigated, 1)
+    )
+
+
 @app.get("/")
 def root():
     return {"status": "BoltTwin API running", "docs": "/docs"}

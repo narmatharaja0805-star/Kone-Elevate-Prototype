@@ -50,3 +50,25 @@ class WhatIfOut(BaseModel):
     health_index_delta: float
     rul_delta_cycles: float
     summary: str
+
+
+class MaintenanceAction(BaseModel):
+    id: int
+    tag: str
+    component_type: str
+    health_index: float
+    risk_score: float
+    inspection_hours: float
+
+
+class OptimizeMaintenanceResponse(BaseModel):
+    selected: list[MaintenanceAction]
+    deferred: list[MaintenanceAction]
+    total_hours_used: float
+    total_risk_mitigated: float
+
+
+class TelemetryPayload(BaseModel):
+    cycles: float
+    vibration_amplitude_g: float
+    temperature_c: float

@@ -1,13 +1,18 @@
+import os
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-# SQLite for the MVP; swap the URL for a postgres:// DSN when moving to
-# PostgreSQL -- SQLAlchemy + these models don't otherwise change
-# ("PostgreSQL-ready" on the Technologies slide).
-SQLALCHEMY_DATABASE_URL = "sqlite:///./boltwin.db"
+load_dotenv()
+
+# Use DATABASE_URL from .env if available, otherwise fallback to SQLite
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./boltwin.db")
+
+# If using SQLite, we need check_same_thread=False
+connect_args = {"check_same_thread": False} if SQLALCHEMY_DATABASE_URL.startswith("sqlite") else {}
 
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+    SQLALCHEMY_DATABASE_URL, connect_args=connect_args
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
