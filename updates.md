@@ -63,3 +63,16 @@ In a real deployment, a Digital Twin doesn't just sit there—it actively listen
 3. **Simulating the Real World:** When running, the script continuously sends new data points to the backend every few seconds, increasing the elevator's cycle count and fluctuating the temperature and vibration. 
 
 In short: **This allows you to run a highly impressive, real-time live demo. You can watch your Digital Twin dashboard update dynamically as if it were connected to a physical elevator that is actively running trips.**
+
+---
+
+# 3D Elevator Speed Simulation & Fastener Recommender
+
+## What is this feature?
+This feature adds a literal 3D visual model on the screen to simulate elevator speed and calculate physics in real-time.
+
+1. **3D Visual Simulation:** Uses Three.js to render a 3D fastener model that vibrates based on the elevator speed you select.
+2. **Speed as the Main Factor & Live Frequency Display:** You can slide the speed setting (m/s). The UI dynamically displays the live **Forcing Frequency** ($f = \text{Speed} \times 5.0\text{ Hz}$).
+3. **Resonance and Thresholds:** Based on each fastener's **Natural Frequency ($f_n$)** and the operating forcing frequency, it calculates the amplified vibration (transmissibility/resonance).
+4. **Fastener Recommendation:** Displays the natural frequencies, calculated vibration, and safety limits for various fastener types (Steel, Titanium, Polymer), clearly marking whether each passes safety thresholds.
+

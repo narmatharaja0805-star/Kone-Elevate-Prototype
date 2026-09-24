@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from . import models, schemas
 from .database import engine, get_db
-from .physics import SimInputs, run_physics_pipeline, health_band
+from .physics import SimInputs, run_physics_pipeline, health_band, calculate_resonance
 from .ml_correction import corrector
 from .assistant import explain_simulation, explain_whatif, answer_question
 from .synthetic_data import FLEET
@@ -205,6 +205,49 @@ def optimize_maintenance(hours: float = 5.0, db: Session = Depends(get_db)):
         total_risk_mitigated=round(risk_mitigated, 1)
     )
 
+
+@app.post("/simulate-speed", response_model=schemas.FastenerSuggestionResponse)
+def simulate_speed(req: schemas.FastenerSuggestionRequest):
+    speed = req.speed_m_s
+    forcing_freq = speed * 5.0
+    
+    fasteners = [
+        {"type": "Standard Steel Bolt", "freq": 50.0, "thresh": 1.5},
+        {"type": "High-Tensile Titanium Bolt", "freq": 120.0, "thresh": 2.5},
+        {"type": "Damped Polymer Bolt", "freq": 20.0, "thresh": 1.2}
+    ]
+    
+    options = []
+    recommended = None
+    best_margin = -float('inf')
+    
+    for f in fasteners:
+        vib = calculate_resonance(speed, f["freq"], base_vibration_g=0.5)
+        is_safe = vib < f["thresh"]
+        
+        options.append({
+            "type": f["type"],
+            "natural_frequency_hz": f["freq"],
+            "vibration_threshold_g": f["thresh"],
+            "calculated_vibration_g": round(vib, 3),
+            "is_safe": is_safe
+        })
+        
+        margin = f["thresh"] - vib
+        if is_safe and margin > best_margin:
+            best_margin = margin
+            recommended = f["type"]
+            
+    # If none are safe, pick the one with highest threshold
+    if not recommended:
+        recommended = "High-Tensile Titanium Bolt"
+        
+    return schemas.FastenerSuggestionResponse(
+        speed_m_s=speed,
+        forcing_frequency_hz=forcing_freq,
+        options=options,
+        recommended_fastener=recommended
+    )
 
 @app.get("/")
 def root():

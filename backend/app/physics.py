@@ -211,3 +211,22 @@ def run_physics_pipeline(inp: SimInputs) -> PhysicsResult:
         rul_cycles=rul_cycles,
         decay_curve=decay_curve,
     )
+
+# ---------------------------------------------------------------------------
+# 5. Fastener Resonance (3D Speed Simulation)
+# ---------------------------------------------------------------------------
+def calculate_resonance(speed_m_s: float, natural_frequency_hz: float, 
+                        damping_ratio: float = 0.05, base_vibration_g: float = 0.5) -> float:
+    """
+    Calculates the amplified vibration (g) due to resonance.
+    Forcing frequency is assumed proportional to elevator speed (e.g., 5 Hz per m/s).
+    Uses the standard transmissibility formula for a 1-DOF system.
+    """
+    forcing_frequency_hz = speed_m_s * 5.0  # simple linear mapping
+    frequency_ratio = forcing_frequency_hz / max(natural_frequency_hz, 0.1)
+    
+    # Amplification factor (Transmissibility)
+    transmissibility = 1.0 / np.sqrt((1.0 - frequency_ratio**2)**2 + (2.0 * damping_ratio * frequency_ratio)**2)
+    
+    return float(base_vibration_g * transmissibility)
+

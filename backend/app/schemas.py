@@ -72,3 +72,21 @@ class TelemetryPayload(BaseModel):
     cycles: float
     vibration_amplitude_g: float
     temperature_c: float
+
+
+class FastenerSuggestionRequest(BaseModel):
+    speed_m_s: float
+
+class FastenerOption(BaseModel):
+    type: str
+    natural_frequency_hz: float
+    vibration_threshold_g: float
+    calculated_vibration_g: float
+    is_safe: bool
+
+class FastenerSuggestionResponse(BaseModel):
+    speed_m_s: float
+    forcing_frequency_hz: float
+    options: list[FastenerOption]
+    recommended_fastener: str
+
