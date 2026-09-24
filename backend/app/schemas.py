@@ -7,6 +7,8 @@ class BoltOut(BaseModel):
     tag: str
     component_type: str
     elevator_id: str
+    fastener_type: str
+    fastener_size: str
     cycles: float
     vibration_amplitude_g: float
     temperature_c: float
@@ -76,9 +78,11 @@ class TelemetryPayload(BaseModel):
 
 class FastenerSuggestionRequest(BaseModel):
     speed_m_s: float
+    bolt_id: int
 
 class FastenerOption(BaseModel):
     type: str
+    size: str
     natural_frequency_hz: float
     vibration_threshold_g: float
     calculated_vibration_g: float
@@ -87,6 +91,9 @@ class FastenerOption(BaseModel):
 class FastenerSuggestionResponse(BaseModel):
     speed_m_s: float
     forcing_frequency_hz: float
+    current_type: str
+    current_size: str
     options: list[FastenerOption]
     recommended_fastener: str
+    recommended_size: str
 

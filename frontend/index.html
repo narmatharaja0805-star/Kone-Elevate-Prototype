@@ -217,7 +217,7 @@
     );
   }
 
-  function SimulationPanel() {
+  function SimulationPanel({ selectedId }) {
     const [speed, setSpeed] = useState(2.0);
     const [simData, setSimData] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -272,11 +272,12 @@
     }, []);
 
     function runSim() {
+      if (!selectedId) return;
       setLoading(true);
       fetch(`${API_BASE}/simulate-speed`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ speed_m_s: Number(speed) })
+        body: JSON.stringify({ speed_m_s: Number(speed), bolt_id: selectedId })
       }).then(r => r.json()).then(setSimData).finally(() => setLoading(false));
     }
 
@@ -302,7 +303,7 @@
           React.createElement("span", { className: "text-sm font-bold w-10" }, `${speed} m/s`),
           React.createElement(
             "button",
-            { onClick: runSim, disabled: loading, className: "px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50" },
+            { onClick: runSim, disabled: loading || !selectedId, className: "px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50" },
             loading ? "Simulating..." : "Calculate Fasteners"
           )
         )
@@ -318,13 +319,16 @@
                 `Calculated Forcing Freq: ${simData.forcing_frequency_hz.toFixed(1)} Hz`
               )
             ),
+            React.createElement("div", { className: "text-xs text-slate-600 mb-3 p-2 bg-slate-100 rounded border border-slate-200" },
+              "Current Bolt: ", React.createElement("strong", null, simData.current_type + " (" + simData.current_size + ")")
+            ),
             React.createElement("div", { className: "space-y-2" },
               simData.options.map(opt => React.createElement(
-                "div", { key: opt.type, className: `p-3 rounded-lg border flex justify-between items-center ${opt.is_safe ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}` },
+                "div", { key: opt.type + opt.size, className: `p-3 rounded-lg border flex justify-between items-center ${opt.is_safe ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}` },
                 React.createElement("div", null,
                   React.createElement("div", { className: `font-semibold text-sm ${opt.is_safe ? 'text-emerald-800' : 'text-rose-800'}` },
-                    opt.type,
-                    opt.type === simData.recommended_fastener ? " ★ (Recommended)" : ""
+                    opt.type + " (" + opt.size + ")",
+                    (opt.type === simData.recommended_fastener && opt.size === simData.recommended_size) ? " ★ (Recommended)" : ""
                   ),
                   React.createElement("div", { className: "text-xs mt-1 space-x-2 text-slate-600" },
                     React.createElement("span", { className: "font-medium text-slate-700" }, `Nat. Frequency: ${opt.natural_frequency_hz} Hz`),
@@ -430,7 +434,7 @@
       },
       /* @__PURE__ */ React.createElement("div", { className: "font-semibold" }, b.tag, " \u2014 ", b.component_type),
       /* @__PURE__ */ React.createElement("div", { className: "text-xs text-slate-500" }, b.elevator_id, " \xB7 ", Math.round(b.cycles).toLocaleString(), " cycles")
-    )), bolts.length === 0 && !error && /* @__PURE__ */ React.createElement("div", { className: "text-sm text-slate-400" }, "Loading fleet\u2026"))), /* @__PURE__ */ React.createElement("main", { className: "flex-1 p-8 max-w-5xl mx-auto w-full" }, error && /* @__PURE__ */ React.createElement("div", { className: "mb-4 p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm" }, error), /* @__PURE__ */ React.createElement(SimulationPanel, null), /* @__PURE__ */ React.createElement(OptimizerPanel, { results: optResults, techHours, setTechHours, onRun: runOptimizer, loading: optLoading }), selectedBolt && /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h1", { className: "text-2xl font-bold" }, selectedBolt.tag, " \u2014 ", selectedBolt.component_type), /* @__PURE__ */ React.createElement("p", { className: "text-slate-500 text-sm" }, selectedBolt.elevator_id, " \xB7 vibration ", selectedBolt.vibration_amplitude_g, "g \xB7 ", selectedBolt.temperature_c, "\xB0C")), sim && /* @__PURE__ */ React.createElement("span", { className: "px-3 py-1 rounded-full border text-sm font-semibold " + bandColor(sim.band) }, sim.band)), loading && /* @__PURE__ */ React.createElement("div", { className: "text-sm text-slate-500 mb-4" }, "Running physics + ML pipeline\u2026"), sim && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-3 gap-4 mb-6" }, /* @__PURE__ */ React.createElement(
+    )), bolts.length === 0 && !error && /* @__PURE__ */ React.createElement("div", { className: "text-sm text-slate-400" }, "Loading fleet\u2026"))), /* @__PURE__ */ React.createElement("main", { className: "flex-1 p-8 max-w-5xl mx-auto w-full" }, error && /* @__PURE__ */ React.createElement("div", { className: "mb-4 p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm" }, error), /* @__PURE__ */ React.createElement(SimulationPanel, { selectedId: selectedId }), /* @__PURE__ */ React.createElement(OptimizerPanel, { results: optResults, techHours, setTechHours, onRun: runOptimizer, loading: optLoading }), selectedBolt && /* @__PURE__ */ React.createElement("div", { className: "mb-6 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h1", { className: "text-2xl font-bold" }, selectedBolt.tag, " \u2014 ", selectedBolt.component_type), /* @__PURE__ */ React.createElement("p", { className: "text-slate-500 text-sm" }, selectedBolt.elevator_id, " \xB7 vibration ", selectedBolt.vibration_amplitude_g, "g \xB7 ", selectedBolt.temperature_c, "\xB0C")), sim && /* @__PURE__ */ React.createElement("span", { className: "px-3 py-1 rounded-full border text-sm font-semibold " + bandColor(sim.band) }, sim.band)), loading && /* @__PURE__ */ React.createElement("div", { className: "text-sm text-slate-500 mb-4" }, "Running physics + ML pipeline\u2026"), sim && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-3 gap-4 mb-6" }, /* @__PURE__ */ React.createElement(
       StatCard,
       {
         label: "Health Index",

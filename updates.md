@@ -76,3 +76,26 @@ This feature adds a literal 3D visual model on the screen to simulate elevator s
 3. **Resonance and Thresholds:** Based on each fastener's **Natural Frequency ($f_n$)** and the operating forcing frequency, it calculates the amplified vibration (transmissibility/resonance).
 4. **Fastener Recommendation:** Displays the natural frequencies, calculated vibration, and safety limits for various fastener types (Steel, Titanium, Polymer), clearly marking whether each passes safety thresholds.
 
+---
+
+# Enterprise Database Architecture: 5 New Tables
+
+## What are these tables and why were they added?
+
+To upgrade BoltTwin from a prototype into an enterprise-ready predictive maintenance platform, we added 5 core tables to our Neon Serverless PostgreSQL database:
+
+1. **`elevators` (Fleet & Asset Metadata):**
+   - Stores building location, floor count, rated operating speed, and elevator status (`ACTIVE`, `MAINTENANCE`, `OFFLINE`).
+
+2. **`fastener_catalog` (Dynamic Materials & Fasteners):**
+   - Replaces hardcoded values with a dynamic database catalog of bolt materials, tensile strengths, natural frequencies ($f_n$), vibration thresholds ($g$), damping ratios ($\zeta$), and costs.
+
+3. **`telemetry_logs` (Time-Series IoT Sensor Stream):**
+   - Retains timestamped historical sensor readings whenever `sensor_simulator.py` or physical IoT gateways push cycle, vibration, or temperature data.
+
+4. **`maintenance_work_orders` (Optimizer $\rightarrow$ Execution Bridge):**
+   - Bridges the mathematical Fleet Optimizer with real technicians by generating actionable work orders with priorities, required hours, and completion statuses (`PENDING`, `IN_PROGRESS`, `COMPLETED`).
+
+5. **`alerts` (Automated Safety & Resonance Triggers):**
+   - Automatically records warnings and critical event logs whenever physical thresholds (e.g. vibration $> 1.8g$, thermal elevation $> 50^\circ\text{C}$, or critical health decay) are breached.
+

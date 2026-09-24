@@ -7,7 +7,7 @@ from .database import engine, get_db
 from .physics import SimInputs, run_physics_pipeline, health_band, calculate_resonance
 from .ml_correction import corrector
 from .assistant import explain_simulation, explain_whatif, answer_question
-from .synthetic_data import FLEET
+from .synthetic_data import FLEET, ELEVATORS, FASTENERS
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -22,7 +22,7 @@ app.add_middleware(
 
 
 # ---------------------------------------------------------------------------
-# Startup: seed the fleet if the DB is empty
+# Startup: seed the fleet and catalogs if the DB is empty
 # ---------------------------------------------------------------------------
 @app.on_event("startup")
 def seed_fleet():
@@ -31,7 +31,19 @@ def seed_fleet():
         for item in FLEET:
             db.add(models.Bolt(**item))
         db.commit()
+
+    if db.query(models.Elevator).count() == 0:
+        for item in ELEVATORS:
+            db.add(models.Elevator(**item))
+        db.commit()
+
+    if db.query(models.FastenerCatalog).count() == 0:
+        for item in FASTENERS:
+            db.add(models.FastenerCatalog(**item))
+        db.commit()
+
     db.close()
+
 
 
 # ---------------------------------------------------------------------------
@@ -142,6 +154,29 @@ def update_telemetry(bolt_id: int, req: schemas.TelemetryPayload, db: Session = 
     bolt.vibration_amplitude_g = req.vibration_amplitude_g
     bolt.temperature_c = req.temperature_c
     
+    # 1. Store time-series telemetry log
+    log_entry = models.TelemetryLog(
+        bolt_id=bolt.id,
+        cycles=req.cycles,
+        vibration_amplitude_g=req.vibration_amplitude_g,
+        temperature_c=req.temperature_c
+    )
+    db.add(log_entry)
+
+    # 2. Automated Safety Alerts Trigger
+    if req.vibration_amplitude_g > 1.8:
+        db.add(models.Alert(
+            bolt_id=bolt.id,
+            severity="CRITICAL",
+            message=f"Critical vibration threshold breached on {bolt.tag} ({req.vibration_amplitude_g}g > 1.8g safe limit)."
+        ))
+    elif req.temperature_c > 50.0:
+        db.add(models.Alert(
+            bolt_id=bolt.id,
+            severity="WARNING",
+            message=f"Thermal elevation detected on {bolt.tag} ({req.temperature_c}°C > 50°C)."
+        ))
+
     db.commit()
     db.refresh(bolt)
     return bolt
@@ -149,7 +184,6 @@ def update_telemetry(bolt_id: int, req: schemas.TelemetryPayload, db: Session = 
 
 @app.get("/fleet/optimize-maintenance", response_model=schemas.OptimizeMaintenanceResponse)
 def optimize_maintenance(hours: float = 5.0, db: Session = Depends(get_db)):
-    # Hardcoded component properties: criticality (1-10) and inspection hours
     COMPONENT_PROPS = {
         "Brake Caliper": {"criticality": 10, "hours": 2.0},
         "Motor Mount": {"criticality": 7, "hours": 1.5},
@@ -161,7 +195,6 @@ def optimize_maintenance(hours: float = 5.0, db: Session = Depends(get_db)):
     actions = []
     
     for b in bolts:
-        # Get simulated health
         sim = _simulate(b.cycles, b.vibration_amplitude_g, b.temperature_c)
         health = sim["health_index_final"]
         
@@ -181,7 +214,6 @@ def optimize_maintenance(hours: float = 5.0, db: Session = Depends(get_db)):
             "value_per_hour": value_per_hour
         })
         
-    # Greedy knapsack: sort by value per hour descending
     actions.sort(key=lambda x: x["value_per_hour"], reverse=True)
     
     selected = []
@@ -207,18 +239,30 @@ def optimize_maintenance(hours: float = 5.0, db: Session = Depends(get_db)):
 
 
 @app.post("/simulate-speed", response_model=schemas.FastenerSuggestionResponse)
-def simulate_speed(req: schemas.FastenerSuggestionRequest):
+def simulate_speed(req: schemas.FastenerSuggestionRequest, db: Session = Depends(get_db)):
     speed = req.speed_m_s
     forcing_freq = speed * 5.0
     
-    fasteners = [
-        {"type": "Standard Steel Bolt", "freq": 50.0, "thresh": 1.5},
-        {"type": "High-Tensile Titanium Bolt", "freq": 120.0, "thresh": 2.5},
-        {"type": "Damped Polymer Bolt", "freq": 20.0, "thresh": 1.2}
-    ]
+    bolt = db.get(models.Bolt, req.bolt_id)
+    if not bolt:
+        raise HTTPException(404, "Bolt not found")
+        
+    # Query fastener options dynamically from the DB catalog
+    db_fasteners = db.query(models.FastenerCatalog).all()
+    if not db_fasteners:
+        fasteners = [
+            {"type": "Standard Steel Bolt", "size": "M12", "freq": 50.0, "thresh": 1.5},
+            {"type": "High-Tensile Titanium Bolt", "size": "M12", "freq": 120.0, "thresh": 2.5},
+        ]
+    else:
+        fasteners = [
+            {"type": f.name, "size": f.size, "freq": f.natural_frequency_hz, "thresh": f.vibration_threshold_g}
+            for f in db_fasteners
+        ]
     
     options = []
     recommended = None
+    recommended_size = None
     best_margin = -float('inf')
     
     for f in fasteners:
@@ -227,6 +271,7 @@ def simulate_speed(req: schemas.FastenerSuggestionRequest):
         
         options.append({
             "type": f["type"],
+            "size": f["size"],
             "natural_frequency_hz": f["freq"],
             "vibration_threshold_g": f["thresh"],
             "calculated_vibration_g": round(vib, 3),
@@ -237,18 +282,74 @@ def simulate_speed(req: schemas.FastenerSuggestionRequest):
         if is_safe and margin > best_margin:
             best_margin = margin
             recommended = f["type"]
+            recommended_size = f["size"]
             
-    # If none are safe, pick the one with highest threshold
     if not recommended:
-        recommended = "High-Tensile Titanium Bolt"
+        recommended = fasteners[0]["type"]
+        recommended_size = fasteners[0]["size"]
         
     return schemas.FastenerSuggestionResponse(
         speed_m_s=speed,
         forcing_frequency_hz=forcing_freq,
+        current_type=bolt.fastener_type,
+        current_size=bolt.fastener_size,
         options=options,
-        recommended_fastener=recommended
+        recommended_fastener=recommended,
+        recommended_size=recommended_size
     )
+
+
+# ---------------------------------------------------------------------------
+# Endpoints for the newly added tables
+# ---------------------------------------------------------------------------
+@app.get("/elevators")
+def get_elevators(db: Session = Depends(get_db)):
+    return db.query(models.Elevator).all()
+
+
+@app.get("/fastener-catalog")
+def get_fastener_catalog(db: Session = Depends(get_db)):
+    return db.query(models.FastenerCatalog).all()
+
+
+@app.get("/telemetry-logs")
+def get_telemetry_logs(bolt_id: int = None, limit: int = 50, db: Session = Depends(get_db)):
+    q = db.query(models.TelemetryLog)
+    if bolt_id:
+        q = q.filter(models.TelemetryLog.bolt_id == bolt_id)
+    return q.order_by(models.TelemetryLog.recorded_at.desc()).limit(limit).all()
+
+
+@app.get("/alerts")
+def get_alerts(db: Session = Depends(get_db)):
+    return db.query(models.Alert).order_by(models.Alert.triggered_at.desc()).limit(20).all()
+
+
+@app.get("/work-orders")
+def get_work_orders(db: Session = Depends(get_db)):
+    return db.query(models.MaintenanceWorkOrder).order_by(models.MaintenanceWorkOrder.created_at.desc()).all()
+
+
+@app.post("/work-orders/create-from-optimizer")
+def create_work_orders_from_optimizer(hours: float = 5.0, db: Session = Depends(get_db)):
+    opt = optimize_maintenance(hours=hours, db=db)
+    created = []
+    for action in opt.selected:
+        bolt = db.get(models.Bolt, action.id)
+        order = models.MaintenanceWorkOrder(
+            elevator_id=bolt.elevator_id if bolt else "UNKNOWN",
+            bolt_id=action.id,
+            priority="CRITICAL" if action.health_index < 40 else "INSPECT",
+            required_hours=action.inspection_hours,
+            status="PENDING"
+        )
+        db.add(order)
+        created.append(order)
+    db.commit()
+    return {"message": f"Created {len(created)} work orders from optimizer", "count": len(created)}
+
 
 @app.get("/")
 def root():
     return {"status": "BoltTwin API running", "docs": "/docs"}
+
